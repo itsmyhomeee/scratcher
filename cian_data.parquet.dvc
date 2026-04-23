@@ -1,0 +1,5 @@
+outs:
+- md5: 909f80e1ab34d63341421aef7dce60c4
+  size: 25592
+  hash: md5
+  path: cian_data.parquet

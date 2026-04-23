@@ -1,0 +1,10 @@
+[core]
+    remote = minio
+[cache]
+    type = hardlink
+['remote "minio"']
+    url = s3://dvc-store
+    endpointurl = http://localhost:9000
+    access_key_id = minioadmin
+    secret_access_key = minioadmin123
+    region = us-east-1

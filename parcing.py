@@ -99,6 +99,7 @@ class CianParser:
             except Exception as e:
                 print(f"  Ошибка при загрузке фото {filename}: {e}")
 
+        return s3_uris
   
 
     # ------------------------------------------------------------------
@@ -158,8 +159,11 @@ class CianParser:
             if sq_locator.count() > 0:
                 square = sq_locator.inner_text().strip()
         except Exception as e:
-            print(f"  Ошибка парсинга площади: {e}")
+            print(f"Ошибка парсинга площади: {e}")
 
+        
+
+        photo_s3_uris = None
         offer_id = self.extract_id(url)
         photo_s3_uris = self.upload_photos(offer_id)
 
@@ -177,16 +181,17 @@ class CianParser:
     # ------------------------------------------------------------------
 
     def parse(self):
+
         self.page.get_by_placeholder(
             "Купить квартиру с большой кухней рядом с метро"
         ).type(text=self.keyword, delay=0.1)
         self.page.query_selector('button[data-name="search-submit"]').click()
         self.page.wait_for_selector('[data-name="CardComponent"]', timeout=15000)
 
-        all_unique_links = set()
-        target_count = 10
-        current_page = 1
         base_search_url = self.page.url
+        all_unique_links = set()
+        target_count = 800
+        current_page = 1
 
         while len(all_unique_links) < target_count:
             print(f"Сбор ссылок со страницы {current_page} (собрано: {len(all_unique_links)})")
@@ -208,7 +213,7 @@ class CianParser:
                 if href:
                     all_unique_links.add(href.split('?')[0])
 
-            if len(all_unique_links) == before_count or current_page >= 10:
+            if len(all_unique_links) == before_count or current_page >= 54:
                 break
 
             current_page += 1
@@ -228,9 +233,6 @@ class CianParser:
 
         self.save_to_json()
 
-    # ------------------------------------------------------------------
-    # БАГ-3 ИСПРАВЛЕН: run_parser вызывался в __main__, но не существовал
-    # ------------------------------------------------------------------
 
     def run_parser(self, headless: bool = False):
         self._ensure_bucket()
