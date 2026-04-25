@@ -3,8 +3,10 @@ import re
 import pandas as pd
 import pandera as pa
 from pandera import Column, DataFrameSchema, Check
-import pyarrow as pa
+import pyarrow as arrow      # переименовано чтобы не конфликтовать с pandera (pa)
 import pyarrow.parquet as pq
+
+
 
 def clean_price(value) -> float | None:
     """'82000000₽' → 82000000.0"""
@@ -52,16 +54,31 @@ def load_and_clean(path: str = "cian_results.json") -> pd.DataFrame:
             "new_building": bool(data.get("new_building", False)),
             "photos_count": clean_photos(data.get("photos")),
             "description":  data.get("description"),
+            # новые поля из парсера
+            "repair":       data.get("repair"),   # float 0.0–1.0 или None
+            "lat":          data.get("lat"),       # float или None
+            "lon":          data.get("lon"),       # float или None
         })
 
     df = pd.DataFrame(rows)
-    df["price"]  = pd.to_numeric(df["price"],  errors="coerce")
-    df["square"] = pd.to_numeric(df["square"], errors="coerce")
+    df["price"]        = pd.to_numeric(df["price"],  errors="coerce")
+    df["square"]       = pd.to_numeric(df["square"], errors="coerce")
+    df["repair"]       = pd.to_numeric(df["repair"], errors="coerce")
+    df["lat"]          = pd.to_numeric(df["lat"],    errors="coerce")
+    df["lon"]          = pd.to_numeric(df["lon"],    errors="coerce")
     df["photos_count"] = df["photos_count"].astype(int)
-    table = pa.Table.from_pandas(df, preserve_index=False)
-    pq.write_table(table, "cian_data.parquet")
 
+    # Сохраняем parquet
+    table = arrow.Table.from_pandas(df, preserve_index=False)
+    pq.write_table(table, "cian_data.parquet")
+    print("Сохранено → cian_data.parquet")
+
+    return df   # обязательно возвращаем датафрейм
+
+
+# ==================================================================
 # 2. СХЕМА PANDERA
+# ==================================================================
 
 schema = DataFrameSchema(
     columns={
@@ -74,7 +91,6 @@ schema = DataFrameSchema(
             ),
             nullable=False,
             unique=True,
-            description="Числовой ID объявления из URL",
         ),
 
         "url": Column(
@@ -85,25 +101,19 @@ schema = DataFrameSchema(
             ),
             nullable=False,
             unique=True,
-            description="Прямая ссылка на объявление",
         ),
 
         # Цена: от 1 млн до 2 млрд рублей
-        # Ниже 1 млн — явная ошибка парсинга для Москвы
-        # Выше 2 млрд — выброс / нежилая недвижимость
         "price": Column(
             float,
             checks=[
-                Check(lambda s: s.dropna().ge(1_000_000),      error="Цена не может быть меньше 1 000 000 ₽"),
-                Check(lambda s: s.dropna().le(2_000_000_000),  error="Цена не может быть больше 2 000 000 000 ₽"),
+                Check(lambda s: s.dropna().ge(1_000_000),     error="Цена не может быть меньше 1 000 000 ₽"),
+                Check(lambda s: s.dropna().le(2_000_000_000), error="Цена не может быть больше 2 000 000 000 ₽"),
             ],
             nullable=True,
-            description="Цена в рублях (float, без символа ₽)",
         ),
 
         # Площадь: от 12 до 1000 м²
-        # 12 м² — минимальная студия / апартамент
-        # 1000 м² — очевидный выброс / пентхаус
         "square": Column(
             float,
             checks=[
@@ -111,59 +121,74 @@ schema = DataFrameSchema(
                 Check(lambda s: s.dropna().le(1000), error="Площадь не может быть больше 1000 м²"),
             ],
             nullable=True,
-            description="Общая площадь квартиры в м²",
         ),
 
-        # Адрес: непустая строка содержащая 'Москва'
         "address": Column(
             str,
             checks=[
-                Check(lambda s: s.dropna().str.len().gt(5),                         error="Адрес слишком короткий"),
-                Check(lambda s: s.dropna().str.contains("Москва", case=False),      error="Адрес должен содержать 'Москва'"),
+                Check(lambda s: s.dropna().str.len().gt(5),                    error="Адрес слишком короткий"),
+                Check(lambda s: s.dropna().str.contains("Москва", case=False), error="Адрес должен содержать 'Москва'"),
             ],
             nullable=True,
-            description="Полный адрес объявления",
         ),
 
-        # Станция метро: строка или null (не пустая строка)
         "station": Column(
             str,
             checks=Check(
                 lambda s: s.dropna().str.len().gt(0),
-                error="station не может быть пустой строкой — используй null"
+                error="station не может быть пустой строкой"
             ),
             nullable=True,
-            description="Ближайшая станция метро или null",
         ),
 
-        # Новостройка: строго булево
-        "new_building": Column(
-            bool,
-            nullable=False,
-            description="True если год постройки >= 2020",
-        ),
+        "new_building": Column(bool, nullable=False),
 
-        # Количество фото: 0–100
-        # Верхний порог 100 — защита от мусора в данных
+        # Количество фото: 0–10 (лимит парсера)
         "photos_count": Column(
             int,
             checks=[
-                Check(lambda s: s.ge(0),   error="Количество фото не может быть отрицательным"),
-                Check(lambda s: s.le(100), error="Количество фото не может быть больше 100"),
+                Check(lambda s: s.ge(0),  error="Количество фото не может быть отрицательным"),
+                Check(lambda s: s.le(10), error="Количество фото не может быть больше 10"),
             ],
             nullable=False,
-            description="Количество загруженных фото в MinIO",
         ),
 
-        # Описание: если есть — не короче 10 символов
         "description": Column(
             str,
             checks=Check(
                 lambda s: s.dropna().str.len().ge(10),
-                error="Описание слишком короткое (меньше 10 символов)"
+                error="Описание слишком короткое"
             ),
             nullable=True,
-            description="Текст описания объявления",
+        ),
+
+        # Скор ремонта: от 0.0 до 1.0
+        "repair": Column(
+            float,
+            checks=[
+                Check(lambda s: s.dropna().ge(0.0), error="repair не может быть меньше 0.0"),
+                Check(lambda s: s.dropna().le(1.0), error="repair не может быть больше 1.0"),
+            ],
+            nullable=True,
+        ),
+
+        # Координаты Москвы: lat 55–56, lon 37–38
+        "lat": Column(
+            float,
+            checks=[
+                Check(lambda s: s.dropna().ge(55.0), error="lat выходит за пределы Москвы"),
+                Check(lambda s: s.dropna().le(56.0), error="lat выходит за пределы Москвы"),
+            ],
+            nullable=True,
+        ),
+
+        "lon": Column(
+            float,
+            checks=[
+                Check(lambda s: s.dropna().ge(37.0), error="lon выходит за пределы Москвы"),
+                Check(lambda s: s.dropna().le(38.0), error="lon выходит за пределы Москвы"),
+            ],
+            nullable=True,
         ),
     },
 
@@ -173,23 +198,23 @@ schema = DataFrameSchema(
 
 
 # ==================================================================
-# 3. ЗАПУСК ВАЛИДАЦИИ
+# 3. ЗАПУСК
 # ==================================================================
 
 if __name__ == "__main__":
     print("Загружаем и очищаем данные...")
-    df = load_and_clean("cian_results.json") 
-    print(df[["price", "square"]].head())
+    df = load_and_clean("cian_results.json")
 
     print(f"Загружено записей: {len(df)}")
+    print(f"Типы колонок:\n{df.dtypes}\n")
 
     print("Запускаем валидацию по схеме Pandera...")
     try:
         validated_df = schema.validate(df, lazy=True)
-        print("Все проверки пройдены успешно!")
+        print("✓ Все проверки пройдены успешно!")
         print(validated_df.describe())
 
     except pa.errors.SchemaErrors as e:
-        print("Найдены ошибки валидации:\n")
+        print("✗ Найдены ошибки валидации:\n")
         failure_cases = e.failure_cases[["check", "failure_case", "index"]].drop_duplicates()
         print(failure_cases.to_string(index=False))

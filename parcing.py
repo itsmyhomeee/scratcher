@@ -189,11 +189,11 @@ class CianParser:
 
         square = None
         try:
-            sq_locator = self.page.locator(
-                '//div[@data-name="ObjectFactoidsItem"][.//p[text()="Площадь"]]/p[2]'
-            )
+            sq_locator = self.page.locator('[data-name="ObjectFactoidsItem"]').filter(
+                has_text="Общая площадь"
+            ).locator('span[style*="letter-spacing"]')
             if sq_locator.count() > 0:
-                square = sq_locator.inner_text().strip()
+                square = sq_locator.inner_text().replace("\xa0", "").replace("м²", "").strip()
         except Exception as e:
             print(f"  Ошибка парсинга площади: {e}")
 
@@ -249,7 +249,7 @@ class CianParser:
         base_search_url = self.page.url
         all_unique_links = set()
         target_count = 1
-        
+
         current_page = 1
 
         while len(all_unique_links) < target_count:
