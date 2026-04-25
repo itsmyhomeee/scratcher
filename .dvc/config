@@ -3,8 +3,7 @@
 [cache]
     type = hardlink
 ['remote "minio"']
-    url = s3://dvc-store
-    endpointurl = http://localhost:9000
-    access_key_id = minioadmin
-    secret_access_key = minioadmin123
-    region = us-east-1
+    url = s3://cian-photos/dvc-store
+    endpointurl = http://localhost:9001
+    access_key_id = admin
+    secret_access_key = password123

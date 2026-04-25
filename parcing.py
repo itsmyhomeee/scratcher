@@ -1,3 +1,4 @@
+import re
 import time
 import json
 import requests
@@ -7,6 +8,35 @@ from playwright.sync_api import sync_playwright
 
 
 class CianParser:
+
+    REPAIR_RATING = {
+        "без ремонта": 0.0,
+        "требует ремонта": 0.05,
+        "в удовлетворительном": 0.1,
+        "рабочее состояние": 0.1,
+        "косметический": 0.3,
+        "сделан косметический": 0.3,
+        "стандартный": 0.4,
+        "современный": 0.5,
+        "хороший": 0.5,
+        "черновой": 0.0,
+        "чистовая отделка": 0.4,
+        "от застройщика": 0.4,
+        "евро": 0.7,
+        "евроремонт": 0.7,
+        "евростандарт": 0.7,
+        "под ключ": 0.6,
+        "качественный": 0.6,
+        "хороший ремонт": 0.6,
+        "дизайнерский": 0.85,
+        "премиум": 0.85,
+        "авторский": 0.9,
+        "элитный": 0.9,
+        "идеальный": 1.0,
+        "шоу-рум": 1.0,
+        "с элементами отделки": 0.2,
+        "частичный": 0.15,
+    }
 
     def __init__(self, keyword: str):
         self.keyword = keyword
@@ -22,8 +52,6 @@ class CianParser:
             region_name='us-east-1'
         )
         self.BUCKET_NAME = 'cian-photos'
-
-
 
     def _ensure_bucket(self):
         """Создаёт бакет, если он ещё не существует."""
@@ -52,8 +80,6 @@ class CianParser:
             json.dump(self.results, f, ensure_ascii=False, indent=2)
         print(f"Сохранено {len(self.results)} объявлений → {path}")
 
-
-
     def upload_photos(self, offer_id: str) -> list:
         """Собирает URL фотографий с открытой страницы, скачивает каждую
         и загружает в MinIO. Возвращает список S3 URI."""
@@ -80,7 +106,8 @@ class CianParser:
             print(f"Не удалось получить фото для {offer_id}: {e}")
             return s3_uris
 
-        for idx, photo_url in enumerate(photo_urls):
+        # [:10] — лимит 10 фото на объявление
+        for idx, photo_url in enumerate(photo_urls[:10]):
             filename = f"{offer_id}/{idx + 1}.jpg"
             try:
                 response = requests.get(photo_url, timeout=15)
@@ -94,15 +121,12 @@ class CianParser:
                 )
                 s3_uri = f"s3://{self.BUCKET_NAME}/{filename}"
                 s3_uris.append(s3_uri)
-                print(f" Загружено фото {idx + 1}/{len(photo_urls)}: {s3_uri}")
+                print(f"  Загружено фото {idx + 1}/{min(len(photo_urls), 10)}: {s3_uri}")
 
             except Exception as e:
                 print(f"  Ошибка при загрузке фото {filename}: {e}")
 
         return s3_uris
-  
-
-    # ------------------------------------------------------------------
 
     def parcing_announcement(self, url: str):
         try:
@@ -111,8 +135,6 @@ class CianParser:
             price_text = self.page.query_selector('[data-testid="price-amount"]').inner_text()
             price = price_text.replace("\xa0", "").replace(" ", "").strip()
         except Exception:
-            # БАГ-2 ИСПРАВЛЕН: price не был объявлен до try — NameError при
-            # любом исключении, потому что return словаря шёл ниже
             price = None
 
         description = None
@@ -151,6 +173,20 @@ class CianParser:
         except Exception as e:
             print(f"  Ошибка парсинга года: {e}")
 
+        repair = None
+        try:
+            repair_locator = self.page.locator(
+                '//div[@data-name="OfferSummaryInfoItem"][.//p[text()="Ремонт"]]/p[2]'
+            )
+            if repair_locator.count() > 0:
+                repair_text = repair_locator.inner_text().strip().lower()
+                repair = next(
+                    (score for key, score in self.REPAIR_RATING.items() if key in repair_text),
+                    None
+                )
+        except Exception as e:
+            print(f"  Ошибка парсинга ремонта: {e}")
+
         square = None
         try:
             sq_locator = self.page.locator(
@@ -159,11 +195,33 @@ class CianParser:
             if sq_locator.count() > 0:
                 square = sq_locator.inner_text().strip()
         except Exception as e:
-            print(f"Ошибка парсинга площади: {e}")
+            print(f"  Ошибка парсинга площади: {e}")
 
-        
+        lat, lon = None, None
+        try:
+            # Ждём пока JS отрисует карту и запишет координаты
+            self.page.wait_for_timeout(2000)
+            content = self.page.content()
+            
+            # Пробуем разные паттерны которые использует Циан
+            patterns = [
+                r'"coordinates":\{"lat":([\d.]+),"lng":([\d.]+)',
+                r'"geo":\{"lat":([\d.]+),"lng":([\d.]+)',
+                r'"point":\{"lat":([\d.]+),"lng":([\d.]+)',
+                r'"location":\{"lat":([\d.]+),"lng":([\d.]+)',
+                r'"center":\{"lat":([\d.]+),"lng":([\d.]+)',
+                r'"lat":(5[5-6]\.\d+),"lng":(3[7-8]\.\d+)',  # московские координаты
+            ]
+            for pattern in patterns:
+                match = re.search(pattern, content)
+                if match:
+                    lat = float(match.group(1))
+                    lon = float(match.group(2))
+                    break
 
-        photo_s3_uris = None
+        except Exception as e:
+            print(f"  Ошибка парсинга координат: {e}")
+
         offer_id = self.extract_id(url)
         photo_s3_uris = self.upload_photos(offer_id)
 
@@ -175,13 +233,13 @@ class CianParser:
             "station": station,
             "new_building": new_building,
             "square": square,
+            "repair": repair,
+            "lat": lat,
+            "lon": lon,
             "photos": photo_s3_uris,
         }
 
-    # ------------------------------------------------------------------
-
     def parse(self):
-
         self.page.get_by_placeholder(
             "Купить квартиру с большой кухней рядом с метро"
         ).type(text=self.keyword, delay=0.1)
@@ -190,7 +248,8 @@ class CianParser:
 
         base_search_url = self.page.url
         all_unique_links = set()
-        target_count = 800
+        target_count = 1
+        
         current_page = 1
 
         while len(all_unique_links) < target_count:
@@ -233,7 +292,6 @@ class CianParser:
 
         self.save_to_json()
 
-
     def run_parser(self, headless: bool = False):
         self._ensure_bucket()
         with sync_playwright() as pw:
@@ -247,7 +305,6 @@ class CianParser:
                 self.browser.close()
 
 
-# ------------------------------------------------------------------
 if __name__ == "__main__":
     app = CianParser('Квартира Москва')
     app.run_parser(headless=False)
