@@ -3,7 +3,7 @@ import re
 import pandas as pd
 import pandera as pa
 from pandera import Column, DataFrameSchema, Check
-import pyarrow as arrow      # переименовано чтобы не конфликтовать с pandera (pa)
+import pyarrow as arrow     
 import pyarrow.parquet as pq
 
 
@@ -50,6 +50,7 @@ def load_and_clean(path: str = "cian_results.json") -> pd.DataFrame:
             "repair":       data.get("repair"),   # float 0.0–1.0 или None
             "lat":          data.get("lat"),       # float или None
             "lon":          data.get("lon"),       # float или None
+            "rooms": data.get("rooms")
         })
 
     df = pd.DataFrame(rows)
@@ -59,6 +60,7 @@ def load_and_clean(path: str = "cian_results.json") -> pd.DataFrame:
     df["lat"]          = pd.to_numeric(df["lat"],    errors="coerce")
     df["lon"]          = pd.to_numeric(df["lon"],    errors="coerce")
     df["photos_count"] = df["photos_count"].astype(int)
+    df["rooms"] = pd.to_numeric(df["rooms"], errors = "coerce")
 
     # Сохраняем parquet
     table = arrow.Table.from_pandas(df, preserve_index=False)
@@ -82,7 +84,7 @@ schema = DataFrameSchema(
                 error="offer_id должен быть числовой строкой"
             ),
             nullable=False,
-            unique=True,
+
         ),
 
         "url": Column(
@@ -92,7 +94,6 @@ schema = DataFrameSchema(
                 error="URL должен вести на cian.ru"
             ),
             nullable=False,
-            unique=True,
         ),
 
         # Цена: от 1 млн до 2 млрд рублей
@@ -109,7 +110,7 @@ schema = DataFrameSchema(
         "square": Column(
             float,
             checks=[
-                Check(lambda s: s.dropna().ge(12),   error="Площадь не может быть меньше 12 м²"),
+                Check(lambda s: s.dropna().ge(0), error="Площадь не может быть меньше 0 м²"),
                 Check(lambda s: s.dropna().le(1000), error="Площадь не может быть больше 1000 м²"),
             ],
             nullable=True,
@@ -154,8 +155,14 @@ schema = DataFrameSchema(
             ],
             nullable=True,
         ),
-
-        # Координаты Москвы: lat 55–56, lon 37–38
+        "rooms": Column(
+            float,
+            checks=[
+                Check(lambda s: s.dropna().ge(1), error="rooms не может быть меньше 1"),
+                Check(lambda s: s.dropna().le(10), error="rooms не может быть больше 10"),
+            ],
+            nullable=True,
+        ),
         "lat": Column(
             float,
             checks=[

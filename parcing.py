@@ -218,6 +218,18 @@ class CianParser:
         offer_id = self.extract_id(url)
         photo_s3_uris = self.upload_photos(offer_id)
 
+    
+        title_element = self.page.query_selector('[data-name="OfferTitleNew"]')
+        if title_element:
+            title_text = title_element.inner_text()
+            rooms_match = re.search(r'(\d+)-комн', title_text)
+            if rooms_match:
+                rooms = int(rooms_match.group(1))
+            else:
+                rooms = None
+        else:
+            rooms = None
+
         return {
             "url": url,
             "price": price,
@@ -229,6 +241,7 @@ class CianParser:
             "lat": lat,
             "lon": lon,
             "photos": photo_s3_uris,
+            "rooms": rooms
         }
 
     def parse(self):
@@ -253,7 +266,7 @@ class CianParser:
             )
             self.page.goto(page_url, wait_until="domcontentloaded")
             self._page_down()
-            time.sleep(1.5)
+            time.sleep(1)
 
             elements = self.page.query_selector_all('[data-name="CardComponent"] a[href*="/flat/"]')
 
