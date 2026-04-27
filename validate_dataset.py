@@ -24,13 +24,6 @@ def clean_square(value) -> float | None:
     return float(match.group().replace(',', '.')) if match else None
 
 
-def clean_station(value) -> str | None:
-    """Пустую строку → None"""
-    if not value or str(value).strip() == '':
-        return None
-    return str(value).strip()
-
-
 def clean_photos(value) -> int:
     """Список S3 URI → количество фото (0 если null)"""
     if not value:
@@ -50,7 +43,6 @@ def load_and_clean(path: str = "cian_results.json") -> pd.DataFrame:
             "price":        clean_price(data.get("price")),
             "square":       clean_square(data.get("square")),
             "address":      data.get("address"),
-            "station":      clean_station(data.get("station")),
             "new_building": bool(data.get("new_building", False)),
             "photos_count": clean_photos(data.get("photos")),
             "description":  data.get("description"),
@@ -129,15 +121,6 @@ schema = DataFrameSchema(
                 Check(lambda s: s.dropna().str.len().gt(5),                    error="Адрес слишком короткий"),
                 Check(lambda s: s.dropna().str.contains("Москва", case=False), error="Адрес должен содержать 'Москва'"),
             ],
-            nullable=True,
-        ),
-
-        "station": Column(
-            str,
-            checks=Check(
-                lambda s: s.dropna().str.len().gt(0),
-                error="station не может быть пустой строкой"
-            ),
             nullable=True,
         ),
 

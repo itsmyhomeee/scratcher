@@ -151,13 +151,6 @@ class CianParser:
         except Exception:
             pass
 
-        station = None
-        try:
-            el = self.page.query_selector('[rel="noreferrer"]')
-            station = el.inner_text() if el else None
-        except Exception:
-            pass
-
         new_building = False
         try:
             container = self.page.locator('div[class*="--group"][class*="--right"]')
@@ -230,7 +223,6 @@ class CianParser:
             "price": price,
             "description": description,
             "address": adress,
-            "station": station,
             "new_building": new_building,
             "square": square,
             "repair": repair,
@@ -248,8 +240,7 @@ class CianParser:
 
         base_search_url = self.page.url
         all_unique_links = set()
-        target_count = 1
-
+        target_count = 1000
         current_page = 1
 
         while len(all_unique_links) < target_count:
