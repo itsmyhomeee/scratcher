@@ -5,38 +5,22 @@ import requests
 import boto3
 from botocore.exceptions import ClientError
 from playwright.sync_api import sync_playwright
+from math import radians, sin, cos, sqrt, atan2
 
+# Функция для расчёта расстояния между кремлем и квартирой по координатам
+def haversine(lat1, lon1, lat2, lon2):
+    R = 6371
+    dlat = radians(lat2 - lat1)
+    dlon = radians(lon2 - lon1)
+    a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+    return R * 2 * atan2(sqrt(a), sqrt(1 - a))
+
+
+
+
+#ПАРСЕР
 
 class CianParser:
-
-    REPAIR_RATING = {
-        "без ремонта": 0.0,
-        "требует ремонта": 0.05,
-        "в удовлетворительном": 0.1,
-        "рабочее состояние": 0.1,
-        "косметический": 0.3,
-        "сделан косметический": 0.3,
-        "стандартный": 0.4,
-        "современный": 0.5,
-        "хороший": 0.5,
-        "черновой": 0.0,
-        "чистовая отделка": 0.4,
-        "от застройщика": 0.4,
-        "евро": 0.7,
-        "евроремонт": 0.7,
-        "евростандарт": 0.7,
-        "под ключ": 0.6,
-        "качественный": 0.6,
-        "хороший ремонт": 0.6,
-        "дизайнерский": 0.85,
-        "премиум": 0.85,
-        "авторский": 0.9,
-        "элитный": 0.9,
-        "идеальный": 1.0,
-        "шоу-рум": 1.0,
-        "с элементами отделки": 0.2,
-        "частичный": 0.15,
-    }
 
     def __init__(self, keyword: str):
         self.keyword = keyword
@@ -52,7 +36,6 @@ class CianParser:
             region_name='us-east-1'
         )
         self.BUCKET_NAME = 'cian-photos'
-
     def _ensure_bucket(self):
         """Создаёт бакет, если он ещё не существует."""
         try:
@@ -128,6 +111,11 @@ class CianParser:
 
         return s3_uris
 
+
+
+#АЛГОРИТМ ПОИСКА
+##################################################
+
     def parcing_announcement(self, url: str):
         try:
             self.page.goto(url, timeout=20000, wait_until="domcontentloaded")
@@ -136,21 +124,70 @@ class CianParser:
             price = price_text.replace("\xa0", "").replace(" ", "").strip()
         except Exception:
             price = None
-
+# описание
         description = None
         try:
             el = self.page.query_selector('[data-id="content"]')
             description = el.inner_text() if el else None
         except Exception:
             pass
-
+# адрес
         adress = None
         try:
             el = self.page.query_selector('[data-name="AddressContainer"]')
             adress = el.inner_text() if el else None
         except Exception:
             pass
+        
+        
+#класс дома
+        house_class = None
+        try:
+            HOUSE_CLASS = {
+        "деревянный":          0.0,
+        "панельный":           0.2,
+        "блочный":             0.3,
+        "сталинский":          0.5,
+        "кирпичный":           0.6,
+        "кирпично-монолитный": 0.85,
+        "монолитный":          1.0,
+    }
+            cl_locator = self.page.locator(
+                '//div[@data-name="OfferSummaryInfoItem"][.//p[text()="Тип дома"]]/p[2]'
+            )
+            if cl_locator.count() > 0:
+                cl_text = cl_locator.inner_text().strip().lower()
+                house_class = next(
+                    (score for key, score in HOUSE_CLASS.items() if key in cl_text),
+                    None
+                )
+        except Exception:
+            pass
 
+
+# этаж
+        floor, floors_total = None, None
+        try:
+            floor_locator = self.page.locator('[data-name="ObjectFactoidsItem"]').filter(
+                has_text="Этаж"
+            ).locator('span[style*="letter-spacing"]')
+            
+            if floor_locator.count() > 0:
+                floor_text = floor_locator.inner_text().strip()  # "2 из 8"
+                match = re.search(r'(\d+)\s+из\s+(\d+)', floor_text)
+                if match:
+                    floor = int(match.group(1))
+                    floors_total = int(match.group(2))
+                else:
+                    # если формат просто "2" без "из N"
+                    if floor_text.isdigit():
+                        floor = int(floor_text)
+        except Exception as e:
+            print(f"  Ошибка парсинга этажа: {e}")
+
+
+
+# новизна дома
         new_building = False
         try:
             container = self.page.locator('div[class*="--group"][class*="--right"]')
@@ -166,7 +203,22 @@ class CianParser:
         except Exception as e:
             print(f"  Ошибка парсинга года: {e}")
 
+# ремонт
         repair = None
+
+        REPAIR_RATING = {
+        # Вторичка
+        "без ремонта":  0.0,
+        "косметический": 0.3,
+        "евроремонт":   0.7,
+        "дизайнерский": 1.0,
+        # Новостройка
+        "без отделки":        0.0,
+        "предчистовая":       0.3,
+        "чистовая":           0.7,
+        "чистовая с мебелью": 1.0,
+        }
+        
         try:
             repair_locator = self.page.locator(
                 '//div[@data-name="OfferSummaryInfoItem"][.//p[text()="Ремонт"]]/p[2]'
@@ -174,12 +226,12 @@ class CianParser:
             if repair_locator.count() > 0:
                 repair_text = repair_locator.inner_text().strip().lower()
                 repair = next(
-                    (score for key, score in self.REPAIR_RATING.items() if key in repair_text),
+                    (score for key, score in REPAIR_RATING.items() if key in repair_text),
                     None
                 )
         except Exception as e:
             print(f"  Ошибка парсинга ремонта: {e}")
-
+# Площадь
         square = None
         try:
             sq_locator = self.page.locator('[data-name="ObjectFactoidsItem"]').filter(
@@ -215,6 +267,7 @@ class CianParser:
         except Exception as e:
             print(f"  Ошибка парсинга координат: {e}")
 
+
         offer_id = self.extract_id(url)
         photo_s3_uris = self.upload_photos(offer_id)
 
@@ -240,9 +293,15 @@ class CianParser:
             "repair": repair,
             "lat": lat,
             "lon": lon,
+            "rooms": rooms,
+            "house_class": house_class,
+            "floor": floor,
+            "floors_total": floors_total,
+            "dist_to_center": haversine(lat, lon, 55.7520, 37.6175) if lat and lon else None,
             "photos": photo_s3_uris,
-            "rooms": rooms
+
         }
+
 
     def parse(self):
         self.page.get_by_placeholder(
@@ -253,8 +312,9 @@ class CianParser:
 
         base_search_url = self.page.url
         all_unique_links = set()
-        target_count = 1000
+        target_count = 5000
         current_page = 1
+
 
         while len(all_unique_links) < target_count:
             print(f"Сбор ссылок со страницы {current_page} (собрано: {len(all_unique_links)})")
@@ -284,6 +344,7 @@ class CianParser:
         unique_links = list(all_unique_links)[:target_count]
         print(f"Итого зафиксировано для парсинга: {len(unique_links)}")
 
+
         for i, url in enumerate(unique_links):
             print(f"[{i+1}/{len(unique_links)}] Парсим: {url}")
             offer_id = self.extract_id(url)
@@ -295,6 +356,7 @@ class CianParser:
             time.sleep(1.5)
 
         self.save_to_json()
+
 
     def run_parser(self, headless: bool = False):
         self._ensure_bucket()

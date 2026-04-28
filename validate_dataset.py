@@ -6,6 +6,8 @@ from pandera import Column, DataFrameSchema, Check
 import pyarrow as arrow     
 import pyarrow.parquet as pq
 
+from parcing import haversine
+
 
 
 def clean_price(value) -> float | None:
@@ -46,11 +48,14 @@ def load_and_clean(path: str = "cian_results.json") -> pd.DataFrame:
             "new_building": bool(data.get("new_building", False)),
             "photos_count": clean_photos(data.get("photos")),
             "description":  data.get("description"),
-            # новые поля из парсера
-            "repair":       data.get("repair"),   # float 0.0–1.0 или None
-            "lat":          data.get("lat"),       # float или None
-            "lon":          data.get("lon"),       # float или None
-            "rooms": data.get("rooms")
+            "repair":       data.get("repair"),  
+            "lat":          data.get("lat"),       
+            "lon":          data.get("lon"),       
+            "rooms": data.get("rooms"),
+            "floors_total":     data.get("floors_total"),
+            "dist_to_center":   data.get("dist_to_center"),
+            "house_class":      data.get("house_class"),
+            "floor":            data.get("floor")
         })
 
     df = pd.DataFrame(rows)
@@ -59,8 +64,13 @@ def load_and_clean(path: str = "cian_results.json") -> pd.DataFrame:
     df["repair"]       = pd.to_numeric(df["repair"], errors="coerce")
     df["lat"]          = pd.to_numeric(df["lat"],    errors="coerce")
     df["lon"]          = pd.to_numeric(df["lon"],    errors="coerce")
-    df["photos_count"] = df["photos_count"].astype(int)
-    df["rooms"] = pd.to_numeric(df["rooms"], errors = "coerce")
+    df["floors_total"]   = pd.to_numeric(df["floors_total"],   errors="coerce")
+    df["floor"]          = pd.to_numeric(df["floor"],           errors="coerce")
+    df["dist_to_center"] = pd.to_numeric(df["dist_to_center"], errors="coerce")
+    df['rooms']          = pd.to_numeric(df['rooms'],          errors="coerce")
+    df["house_class"]  = pd.to_numeric(df["house_class"],  errors="coerce")
+    df["photos_count"] = pd.to_numeric(df["photos_count"], errors="coerce").fillna(0).astype(int)
+
 
     # Сохраняем parquet
     table = arrow.Table.from_pandas(df, preserve_index=False)
@@ -156,7 +166,7 @@ schema = DataFrameSchema(
             nullable=True,
         ),
         "rooms": Column(
-            float,
+            int,
             checks=[
                 Check(lambda s: s.dropna().ge(1), error="rooms не может быть меньше 1"),
                 Check(lambda s: s.dropna().le(10), error="rooms не может быть больше 10"),
@@ -180,6 +190,35 @@ schema = DataFrameSchema(
             ],
             nullable=True,
         ),
+        "house_class": Column(
+            float,
+            checks=[
+                Check(lambda s: s.dropna().ge(0.0), error="house_class не может быть меньше 0.0"),
+                Check(lambda s: s.dropna().le(1.0), error="house_class не может быть больше 1.0"),
+            ],
+            nullable=True,
+        ),
+        "floor": Column(
+            int,
+            checks=[
+                Check(lambda s: s.dropna().ge(1),   error="floor не может быть меньше 1"),
+                Check(lambda s: s.dropna().le(150), error="floor не может быть больше 150"),
+            ],
+            nullable=True,
+        ),
+
+        "floors_total": Column(
+            int,
+            checks=[
+                Check(lambda s: s.dropna().ge(1),   error="floors_total не может быть меньше 1"),
+                Check(lambda s: s.dropna().le(150), error="floors_total не может быть больше 150"),
+            ],
+            nullable=True,
+        ),
+        "dist_to_center": Column(
+            float,
+            checks=[
+                Check(lambda s: s.dropna().ge(0), error="dist_to_center не может быть отрицательным"),]),  
     },
 
     unique=["offer_id", "url"],
