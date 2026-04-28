@@ -118,8 +118,8 @@ class CianParser:
 
     def parcing_announcement(self, url: str):
         try:
-            self.page.goto(url, timeout=20000, wait_until="domcontentloaded")
-            self.page.wait_for_selector('[data-testid="price-amount"]', timeout=7000)
+            self.page.goto(url, timeout=30000, wait_until="domcontentloaded",)
+            self.page.wait_for_selector('[data-testid="price-amount"]', timeout=15000)
             price_text = self.page.query_selector('[data-testid="price-amount"]').inner_text()
             price = price_text.replace("\xa0", "").replace(" ", "").strip()
         except Exception:
@@ -324,7 +324,7 @@ class CianParser:
                 if "?" in base_search_url
                 else f"{base_search_url}?p={current_page}"
             )
-            self.page.goto(page_url, wait_until="domcontentloaded")
+            self.page.goto(page_url, wait_until="domcontentloaded", timeout=60000)
             self._page_down()
             time.sleep(1)
 
@@ -353,7 +353,7 @@ class CianParser:
                 self.results[offer_id] = result
                 if (i + 1) % 10 == 0:
                     self.save_to_json()
-            time.sleep(1.5)
+            time.sleep(2.5)
 
         self.save_to_json()
 

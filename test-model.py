@@ -31,7 +31,6 @@ FEATURES = [
     "lon",
     "geo_cluster",     # ← новый, категориальный
     "new_building",
-    "photos_count",
 ]
 TARGET   = "price"
 
@@ -74,7 +73,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 # Передаём список колонок с пропусками — CatBoost обработает сам
 # ==================================================================
 
-cat_features = ["geo_cluster"]  # у нас нет категориальных,
+cat_features = ["geo_cluster"]  
 
 # CatBoost нативно работает с NaN — ничего заполнять не нужно
 train_pool = Pool(X_train, y_train)

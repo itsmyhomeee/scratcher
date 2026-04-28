@@ -34,10 +34,12 @@ def clean_photos(value) -> int:
 
 
 def load_and_clean(path: str = "cian_results.json") -> pd.DataFrame:
+
     with open(path, encoding="utf-8") as f:
         raw = json.load(f)
 
     rows = []
+
     for offer_id, data in raw.items():
         rows.append({
             "offer_id":     offer_id,
@@ -67,9 +69,19 @@ def load_and_clean(path: str = "cian_results.json") -> pd.DataFrame:
     df["floors_total"]   = pd.to_numeric(df["floors_total"],   errors="coerce")
     df["floor"]          = pd.to_numeric(df["floor"],           errors="coerce")
     df["dist_to_center"] = pd.to_numeric(df["dist_to_center"], errors="coerce")
-    df['rooms']          = pd.to_numeric(df['rooms'],          errors="coerce")
+    df['rooms'] = pd.to_numeric(df['rooms'], errors="coerce").astype("Int64")
     df["house_class"]  = pd.to_numeric(df["house_class"],  errors="coerce")
     df["photos_count"] = pd.to_numeric(df["photos_count"], errors="coerce").fillna(0).astype(int)
+    cols_to_int = ["rooms", "floor", "floors_total"]
+    for col in cols_to_int:
+        df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
+    df = df[(df["price"] >= 1_000_000) & (df["price"] <= 2_000_000_000)]
+    df = df[
+        (df["lat"].between(55.0, 56.0)) & 
+        (df["lon"].between(37.0, 38.0))
+    ]
+    df.dropna(subset=["offer_id", "url", "price", "new_building", "photos_count"], inplace=True)
+    df.dropna(subset=["offer_id", "url"], inplace=True)
 
 
     # Сохраняем parquet
@@ -77,12 +89,11 @@ def load_and_clean(path: str = "cian_results.json") -> pd.DataFrame:
     pq.write_table(table, "cian_data.parquet")
     print("Сохранено → cian_data.parquet")
 
-    return df   # обязательно возвращаем датафрейм
+    return df   
 
 
-# ==================================================================
-# 2. СХЕМА PANDERA
-# ==================================================================
+# СХЕМА PANDERA
+
 
 schema = DataFrameSchema(
     columns={
@@ -166,7 +177,7 @@ schema = DataFrameSchema(
             nullable=True,
         ),
         "rooms": Column(
-            int,
+            "Int64",
             checks=[
                 Check(lambda s: s.dropna().ge(1), error="rooms не может быть меньше 1"),
                 Check(lambda s: s.dropna().le(10), error="rooms не может быть больше 10"),
@@ -199,7 +210,7 @@ schema = DataFrameSchema(
             nullable=True,
         ),
         "floor": Column(
-            int,
+            "Int64",
             checks=[
                 Check(lambda s: s.dropna().ge(1),   error="floor не может быть меньше 1"),
                 Check(lambda s: s.dropna().le(150), error="floor не может быть больше 150"),
@@ -208,7 +219,7 @@ schema = DataFrameSchema(
         ),
 
         "floors_total": Column(
-            int,
+            "Int64",
             checks=[
                 Check(lambda s: s.dropna().ge(1),   error="floors_total не может быть меньше 1"),
                 Check(lambda s: s.dropna().le(150), error="floors_total не может быть больше 150"),
@@ -233,6 +244,7 @@ schema = DataFrameSchema(
 if __name__ == "__main__":
     print("Загружаем и очищаем данные...")
     df = load_and_clean("cian_results.json")
+    
 
     print(f"Загружено записей: {len(df)}")
     print(f"Типы колонок:\n{df.dtypes}\n")
