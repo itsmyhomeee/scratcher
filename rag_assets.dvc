@@ -1,0 +1,6 @@
+outs:
+- md5: 0d1d74f24a97ede46dc36845646fa701.dir
+  size: 122736889
+  nfiles: 11
+  hash: md5
+  path: rag_assets

@@ -11,3 +11,4 @@ build/
 .env
 .env.*
 /cian_data.parquet
+/rag_assets
