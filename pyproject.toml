@@ -8,6 +8,7 @@ dependencies = [
     "boto3>=1.42.93",
     "catboost>=1.2.10",
     "dvc>=3.67.1",
+    "faiss-cpu>=1.13.2",
     "geopy>=2.4.1",
     "pandas>=3.0.2",
     "pandera>=0.31.1",
@@ -16,6 +17,7 @@ dependencies = [
     "pyautogui>=0.9.54",
     "pytest>=9.0.3",
     "scikit-learn>=1.8.0",
+    "sentence-transformers>=5.4.1",
 ]
 
 [dependency-groups]

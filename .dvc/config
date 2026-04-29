@@ -12,3 +12,4 @@
     endpointurl = http://localhost:9000
 ['remote "gdrive_storage"']
     url = gdrive://1tE-ytfAHhlz_P1KQqXcf6H1RjqwzG9QK
+    gdrive_use_service_account = false
