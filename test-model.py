@@ -16,11 +16,6 @@ def haversine(lat1, lon1, lat2, lon2):
 # Кремль
 MOSCOW_CENTER = (55.7520, 37.6175)
 
-
-# ==================================================================
-# 1. ЗАГРУЗКА И ПОДГОТОВКА
-# ==================================================================
-
 df = pd.read_parquet("cian_data.parquet")
 
 FEATURES = [
@@ -29,7 +24,7 @@ FEATURES = [
     "repair",
     "lat",
     "lon",
-    "geo_cluster",     # ← новый, категориальный
+    "geo_cluster", 
     "new_building",
     "photos_count",
 ]
@@ -61,36 +56,27 @@ y = df[TARGET]
 print(f"Обучающая выборка: {len(df)} записей")
 print(f"Пропуски в фичах:\n{X.isna().sum()}\n")
 
-# ==================================================================
-# 2. СПЛИТ
-# ==================================================================
-
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42
 )
 
-# ==================================================================
-# 3. CATBOOST POOL
-# Передаём список колонок с пропусками — CatBoost обработает сам
-# ==================================================================
+# CATBOOST POOL
 
-cat_features = ["geo_cluster"]  # у нас нет категориальных,
+cat_features = ["geo_cluster"]  
 
-# CatBoost нативно работает с NaN — ничего заполнять не нужно
 train_pool = Pool(X_train, y_train)
 test_pool  = Pool(X_test,  y_test)
 
-# ==================================================================
-# 4. ОБУЧЕНИЕ
-# ==================================================================
+
+# 4 ОБУЧЕНИЕ
 
 model = CatBoostRegressor(
     iterations=1000,
     learning_rate=0.05,
     depth=6,
     loss_function="RMSE",
-    eval_metric="MAPE",       # удобно для цен — показывает % ошибки
-    early_stopping_rounds=50, # остановка если val-метрика не улучшается
+    eval_metric="MAPE",   
+    early_stopping_rounds=50,
     random_seed=42,
     verbose=100,
 )
@@ -100,10 +86,6 @@ model.fit(
     eval_set=test_pool,
     use_best_model=True,
 )
-
-# ==================================================================
-# 5. МЕТРИКИ
-# ==================================================================
 
 y_pred = model.predict(X_test)
 
@@ -117,9 +99,7 @@ print(f"MAPE: {mape:.1f}%")
 print(f"R²:   {r2:.3f}")
 print(f"{'='*40}")
 
-# ==================================================================
-# 6. ВАЖНОСТЬ ПРИЗНАКОВ
-# ==================================================================
+
 
 importance = pd.Series(
     model.get_feature_importance(),
