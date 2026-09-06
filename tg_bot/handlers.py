@@ -7,7 +7,7 @@ router = Router()
 
 main_kb = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="🔍 Найти по описанию")],
+        [KeyboardButton(text="🔍 Найти похожие")],
         [KeyboardButton(text="💰 Оценить стоимость")],
     ],
     resize_keyboard=True
@@ -23,7 +23,7 @@ class PriceState(StatesGroup):
 async def cmd_start(message: Message):
     await message.answer("🏠 Привет! Я помогу найти жилье или оценить его стоимость.", reply_markup=main_kb)
 
-@router.message(F.text == "🔍 Найти по описанию")
+@router.message(F.text == "🔍 Найти похожие")
 async def start_search(message: Message, state: FSMContext):
     await message.answer("📝 Опишите квартиру (например: 2-к, 60м, метро Арбат):")
     await state.set_state(SearchState.waiting_for_text)

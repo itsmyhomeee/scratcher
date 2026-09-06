@@ -2,7 +2,7 @@ import os
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
-# ВСТАВЬТЕ ВАШ РЕАЛЬНЫЙ КЛЮЧ СЮДА (временно, для теста)
+
 MY_API_KEY = "sk-Raf4dVXNkpR3DST3qajb4cUgk84qRFsb"
 RAG_PROMPT = ChatPromptTemplate.from_template("""
 Ты — узкоспециализированный ассистент по недвижимости. Твоя единственная база знаний — предоставленный ниже КОНТЕКСТ.
