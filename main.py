@@ -7,10 +7,11 @@ sys.path.append(str(Path(__file__).parent))
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
+from config import BOT_TOKEN
 from tg_bot.handlers import router
 from tg_bot.wrapper import CianBotWrapper
 
-bot = Bot(token="8552621598:AAGsYVn37ufYzvBfHCYEOzfWLB8WiJBHv-M")
+bot = Bot(token=BOT_TOKEN)
 dp  = Dispatcher(storage=MemoryStorage())
 
 @dp.startup()

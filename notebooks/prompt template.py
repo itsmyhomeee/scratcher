@@ -1,9 +1,11 @@
 import os
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
+from dotenv import load_dotenv
 
 
-MY_API_KEY = "sk-Raf4dVXNkpR3DST3qajb4cUgk84qRFsb"
+load_dotenv()
+MY_API_KEY = os.getenv("OPENAI_API_KEY")
 RAG_PROMPT = ChatPromptTemplate.from_template("""
 Ты — узкоспециализированный ассистент по недвижимости. Твоя единственная база знаний — предоставленный ниже КОНТЕКСТ.
 
@@ -23,10 +25,10 @@ RAG_PROMPT = ChatPromptTemplate.from_template("""
 
 
 llm = ChatOpenAI(
-    model="gpt-4o-mini", # или gpt-4o, в зависимости от того, что купил
+    model="gpt-4o-mini", 
     openai_api_key= MY_API_KEY,
-    openai_api_base="https://api.proxyapi.ru/openai/v1", # Базовый адрес прокси
-    temperature=0 # Для RAG всегда ставим 0, чтобы модель не галлюцинировала
+    openai_api_base="https://api.proxyapi.ru/openai/v1", 
+    temperature=0 
 )
 # Тест
 response = llm.invoke("Скажи 'Успех!'")

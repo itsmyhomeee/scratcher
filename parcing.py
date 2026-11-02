@@ -6,6 +6,7 @@ import boto3
 from botocore.exceptions import ClientError
 from playwright.sync_api import sync_playwright
 from math import radians, sin, cos, sqrt, atan2
+from config import MINIO_ACCESS_KEY_ID, MINIO_SECRET_ACCESS_KEY
 
 # Функция для расчёта расстояния между кремлем и квартирой по координатам
 def haversine(lat1, lon1, lat2, lon2):
@@ -31,8 +32,8 @@ class CianParser:
         self.s3_client = boto3.client(
             's3',
             endpoint_url='http://localhost:9000',
-            aws_access_key_id='minioadmin',
-            aws_secret_access_key='minioadmin123',
+            aws_access_key_id=MINIO_ACCESS_KEY_ID,
+            aws_secret_access_key=MINIO_SECRET_ACCESS_KEY,
             region_name='us-east-1'
         )
         self.BUCKET_NAME = 'cian-photos'

@@ -5,9 +5,11 @@ from pathlib import Path
 load_dotenv()
 
 BASE_DIR = Path(__file__).parent
-BOT_TOKEN = "8552621598:AAGsYVn37ufYzvBfHCYEOzfWLB8WiJBHv-M"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_API_BASE = os.getenv("OPENAI_API_BASE")
+MINIO_ACCESS_KEY_ID = os.getenv("MINIO_ACCESS_KEY_ID")
+MINIO_SECRET_ACCESS_KEY = os.getenv("MINIO_SECRET_ACCESS_KEY")
 
 TOP_K = 5
 

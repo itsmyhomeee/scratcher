@@ -8,7 +8,7 @@ from tg_bot.wrapper import CianBotWrapper
 
 async def main():
     logging.basicConfig(level=logging.INFO)
-    bot = Bot(token="8552621598:AAGsYVn37ufYzvBfHCYEOzfWLB8WiJBHv-M")
+    bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher(storage=MemoryStorage())
 
     bot_wrapper = CianBotWrapper()
