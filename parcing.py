@@ -5,16 +5,8 @@ import requests
 import boto3
 from botocore.exceptions import ClientError
 from playwright.sync_api import sync_playwright
-from math import radians, sin, cos, sqrt, atan2
-from config import MINIO_ACCESS_KEY_ID, MINIO_SECRET_ACCESS_KEY
-
-# Функция для расчёта расстояния между кремлем и квартирой по координатам
-def haversine(lat1, lon1, lat2, lon2):
-    R = 6371
-    dlat = radians(lat2 - lat1)
-    dlon = radians(lon2 - lon1)
-    a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
-    return R * 2 * atan2(sqrt(a), sqrt(1 - a))
+from config import MINIO_ACCESS_KEY_ID, MINIO_SECRET_ACCESS_KEY, REPAIR_RATING, HOUSE_CLASS
+from geo import haversine
 
 
 
@@ -144,15 +136,6 @@ class CianParser:
 #класс дома
         house_class = None
         try:
-            HOUSE_CLASS = {
-        "деревянный":          0.0,
-        "панельный":           0.2,
-        "блочный":             0.3,
-        "сталинский":          0.5,
-        "кирпичный":           0.6,
-        "кирпично-монолитный": 0.85,
-        "монолитный":          1.0,
-    }
             cl_locator = self.page.locator(
                 '//div[@data-name="OfferSummaryInfoItem"][.//p[text()="Тип дома"]]/p[2]'
             )
@@ -207,19 +190,6 @@ class CianParser:
 # ремонт
         repair = None
 
-        REPAIR_RATING = {
-        # Вторичка
-        "без ремонта":  0.0,
-        "косметический": 0.3,
-        "евроремонт":   0.7,
-        "дизайнерский": 1.0,
-        # Новостройка
-        "без отделки":        0.0,
-        "предчистовая":       0.3,
-        "чистовая с мебелью": 1.0,
-        "чистовая":           0.7,
-        }
-        
         try:
             repair_locator = self.page.locator(
                 '//div[@data-name="OfferSummaryInfoItem"][.//p[text()="Ремонт"]]/p[2]'

@@ -40,7 +40,13 @@ async def start_search(message: Message, state: FSMContext):
 
 @router.message(F.text == "💰 Оценить стоимость")
 async def start_price(message: Message, state: FSMContext):
-    await message.answer("💰 Опишите параметры квартиры для оценки:")
+    await state.clear()
+    await message.answer(
+        "💰 Опишите квартиру для оценки.\n"
+        "Обязательно: площадь и район, улица или метро.\n"
+        "Желательно: комнаты, ремонт, тип дома, этаж.\n"
+        "Например: 2-к, 60 м², метро Арбат, евроремонт, 5 этаж из 9"
+    )
     await state.set_state(PriceState.waiting_for_description)
 
 @router.message(SearchState.waiting_for_text, F.text)
@@ -65,10 +71,31 @@ async def perform_search(message: Message, state: FSMContext, wrapper):
 
 @router.message(PriceState.waiting_for_description, F.text)
 async def perform_price(message: Message, state: FSMContext, wrapper):
-    await state.clear()
+    # Копим ответы, чтобы уточнение дополняло исходное описание
+    data = await state.get_data()
+    text = f"{data['price_text']}\n{message.text}" if data.get("price_text") else message.text
     try:
-        price = await asyncio.to_thread(wrapper.estimate_price, message.text)
+        estimate = await asyncio.to_thread(wrapper.estimate_price, text)
     except Exception:
         logger.exception("Ошибка оценки стоимости")
+        await state.clear()
         return await message.answer("⚠️ Не удалось оценить стоимость. Попробуйте позже.")
-    await message.answer(f"💎 <b>Оценочная стоимость:</b>\n{price:,.0f} ₽", parse_mode="HTML")
+    if estimate.missing:
+        await state.update_data(price_text=text)
+        return await message.answer(f"🤔 Уточните, пожалуйста: {', '.join(estimate.missing)}.")
+
+    await state.clear()
+    p = estimate.params
+    used = [f"{p.square:g} м²", html.escape(p.location)]
+    used += [f"{label}: {html.escape(str(value))}" for label, value in [
+        ("комнат", p.rooms), ("ремонт", p.repair), ("дом", p.house_type),
+        ("этаж", p.floor), ("этажей в доме", p.floors_total),
+    ] if value]
+    if p.new_building:
+        used.append("новостройка")
+    await message.answer(
+        f"💎 <b>Оценочная стоимость:</b>\n{estimate.price:,.0f} ₽\n"
+        f"Диапазон: {estimate.low:,.0f} – {estimate.high:,.0f} ₽\n\n"
+        f"Учтено: {', '.join(used)}",
+        parse_mode="HTML",
+    )

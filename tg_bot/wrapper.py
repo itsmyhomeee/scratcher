@@ -1,14 +1,27 @@
 import os
 import sys
+import numpy as np
 import pandas as pd
+from dataclasses import dataclass, field
 from pathlib import Path
 
 # Добавляем корень проекта в path, чтобы импортировать rag и ai_model
 sys.path.append(str(Path(__file__).parent.parent))
 
 from rag import RagAgent
-from ai_model import RealEstateAI
-from config import FEATURE_COLUMNS, CAT_FEATURES
+from ai_model import RealEstateAI, ApartmentParams
+from config import FEATURE_COLUMNS, CAT_FEATURES, REPAIR_RATING, HOUSE_CLASS
+from geo import MOSCOW_CENTER, geocode_moscow, haversine, nearby_points
+
+
+@dataclass
+class PriceEstimate:
+    params: ApartmentParams
+    price: float | None = None
+    low: float | None = None
+    high: float | None = None
+    missing: list[str] = field(default_factory=list)
+
 
 class CianBotWrapper:
     def __init__(self):
@@ -41,29 +54,48 @@ class CianBotWrapper:
             })
         return formatted
 
-    def estimate_price(self, description: str) -> float:
-        """Метод для оценки стоимости квартиры"""
+    def estimate_price(self, description: str) -> PriceEstimate:
+        """Оценивает квартиру по параметрам из описания пользователя."""
         if self.ai.cat_model is None:
             raise RuntimeError("CatBoost модель не загружена")
 
-        # 1. Ищем похожую квартиру через RAG
-        results_df = self.rag.find_similar(description, k=1)
-        if results_df.empty:
-            raise ValueError("Аналоги для оценки не найдены")
+        params = self.ai.extract_params(description)
 
-        row = results_df.iloc[0]
+        # Площадь и место сильнее всего влияют на цену, без них оценка бессмысленна
+        missing = []
+        square = params.square if params.square and 5 <= params.square <= 1000 else None
+        if square is None:
+            missing.append("общую площадь в м²")
+        coords = geocode_moscow(params.location) if params.location else None
+        if coords is None:
+            missing.append("район, улицу или станцию метро в Москве")
+        if missing:
+            return PriceEstimate(missing=missing, params=params)
 
-        # 2. Формируем DataFrame строго по колонкам из обучения
-        features = pd.DataFrame([row[FEATURE_COLUMNS]])
-        
-        # 3. Приведение типов (как в CatBoost.py)
-        if 'new_building' in features.columns:
-            features['new_building'] = pd.to_numeric(features['new_building'], errors='coerce').fillna(0).astype(int)
-            
-        for col in ['repair', 'house_class', 'rooms']:
-            if col in features.columns:
-                features[col] = features[col].astype(str).replace(['nan', 'None', '<NA>'], 'Unknown').fillna('Unknown')
+        lat, lon = coords
+        meta = self.rag.metadata
+        floor = params.floor if params.floor and params.floor > 0 else None
+        floors_total = params.floors_total if params.floors_total and params.floors_total > 0 else None
+        # Этаж модель обучена видеть всегда, поэтому пропуск заменяем типичным значением
+        floors_total = floors_total or max(int(meta["floors_total"].median()), floor or 1)
+        floor = floor or min(int(meta["floor"].median()), floors_total)
+        rooms = params.rooms if params.rooms and 1 <= params.rooms <= 10 else None
 
-        # 4. Предсказание
-        prediction = self.ai.cat_model.predict(features)[0]
-        return float(prediction)
+        # Категории приводим к тому же виду, что и при обучении в CatBoost.py
+        features = pd.DataFrame([{
+            "square": square,
+            "new_building": int(bool(params.new_building)),
+            "repair": str(REPAIR_RATING[params.repair]) if params.repair else "Unknown",
+            "lat": point_lat,
+            "lon": point_lon,
+            "rooms": str(rooms) if rooms else "Unknown",
+            "floors_total": floors_total,
+            "dist_to_center": haversine(point_lat, point_lon, *MOSCOW_CENTER),
+            "house_class": str(HOUSE_CLASS[params.house_type]) if params.house_type else "Unknown",
+            "floor": floor,
+        } for point_lat, point_lon in nearby_points(lat, lon)])[FEATURE_COLUMNS]
+
+        # В центре цена модели скачет в разы на расстоянии нескольких сотен метров,
+        # поэтому одной точке верить нельзя: берём медиану и разброс по соседним
+        low, price, high = np.percentile(self.ai.cat_model.predict(features), [25, 50, 75])
+        return PriceEstimate(price=float(price), low=float(low), high=float(high), params=params)
