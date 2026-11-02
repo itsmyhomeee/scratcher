@@ -35,9 +35,8 @@ from sklearn.cluster import KMeans
 coords = df[["lat", "lon"]].dropna()
 kmeans = KMeans(n_clusters=30, random_state=42)
 df.loc[coords.index, "geo_cluster"] = kmeans.fit_predict(coords)
-
-# Передать в CatBoost как категориальный:
-cat_features = ["geo_cluster"]
+# Категориальный признак CatBoost принимает только как целое или строку
+df["geo_cluster"] = df["geo_cluster"].fillna(-1).astype(int)
 
 # Убираем строки без таргета
 df = df.dropna(subset=[TARGET])
@@ -64,8 +63,8 @@ X_train, X_test, y_train, y_test = train_test_split(
 
 cat_features = ["geo_cluster"]  
 
-train_pool = Pool(X_train, y_train)
-test_pool  = Pool(X_test,  y_test)
+train_pool = Pool(X_train, y_train, cat_features=cat_features)
+test_pool  = Pool(X_test,  y_test, cat_features=cat_features)
 
 
 # 4 ОБУЧЕНИЕ
@@ -108,6 +107,3 @@ importance = pd.Series(
 
 print(f"\nВажность признаков:\n{importance.round(2)}")
 
-# ==================================================================
-# 7. СОХРАНЕНИЕ
-# ==================================================================

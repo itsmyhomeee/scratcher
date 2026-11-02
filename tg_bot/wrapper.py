@@ -1,17 +1,3 @@
-import pandas as pd
-from config import BASE_DIR, FEATURE_COLUMNS, CAT_FEATURES
-from rag import RagAgent
-from ai_model import RealEstateAI
-
-class CianBotWrapper:
-    def __init__(self):
-        self.rag = RagAgent()
-        self.ai = RealEstateAI()
-
-    def find_similar(self, query: str, top_k: int = 3):
-        results_df = self.rag.find_similar(query, k=top_k)
-        return results_df.to_dict('records')
-
 import os
 import sys
 import pandas as pd
@@ -76,7 +62,7 @@ class CianBotWrapper:
             
         for col in ['repair', 'house_class', 'rooms']:
             if col in features.columns:
-                features[col] = features[col].astype(str).replace(['nan', 'None', '<NA>'], 'Unknown')
+                features[col] = features[col].astype(str).replace(['nan', 'None', '<NA>'], 'Unknown').fillna('Unknown')
 
         # 4. Предсказание
         prediction = self.ai.cat_model.predict(features)[0]

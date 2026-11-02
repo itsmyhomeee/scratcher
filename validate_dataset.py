@@ -6,8 +6,6 @@ from pandera import Column, DataFrameSchema, Check
 import pyarrow as arrow     
 import pyarrow.parquet as pq
 
-from parcing import haversine
-
 
 
 def clean_price(value) -> float | None:
@@ -81,15 +79,15 @@ def load_and_clean(path: str = "cian_results.json") -> pd.DataFrame:
         (df["lon"].between(37.0, 38.0))
     ]
     df.dropna(subset=["offer_id", "url", "price", "new_building", "photos_count"], inplace=True)
-    df.dropna(subset=["offer_id", "url"], inplace=True)
+
+    return df
 
 
-    # Сохраняем parquet
+def save_parquet(df: pd.DataFrame, path: str = "cian_data.parquet") -> None:
+    # Файл под DVC только для чтения: перед запуском нужен `dvc unprotect cian_data.parquet`
     table = arrow.Table.from_pandas(df, preserve_index=False)
-    pq.write_table(table, "cian_data.parquet")
-    print("Сохранено → cian_data.parquet")
-
-    return df   
+    pq.write_table(table, path)
+    print(f"Сохранено → {path}")
 
 
 # СХЕМА PANDERA
@@ -127,7 +125,7 @@ schema = DataFrameSchema(
             nullable=True,
         ),
 
-        # Площадь: от 12 до 1000 м²
+        # Площадь: от 0 до 1000 м²
         "square": Column(
             float,
             checks=[
@@ -254,6 +252,7 @@ if __name__ == "__main__":
         validated_df = schema.validate(df, lazy=True)
         print("✓ Все проверки пройдены успешно!")
         print(validated_df.describe())
+        save_parquet(validated_df)
 
     except pa.errors.SchemaErrors as e:
         print("✗ Найдены ошибки валидации:\n")

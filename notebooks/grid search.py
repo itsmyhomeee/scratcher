@@ -3,7 +3,6 @@ from catboost import CatBoostRegressor
 from model_test import X_train, y_train, X_test, y_test, cat_features
 from sklearn.metrics import mean_absolute_error, r2_score
 
-# Какие параметры будем перебирать
 param_grid = {
     'iterations': [100, 250, 500],     # Количество деревьев
     'learning_rate': [0.01, 0.05, 0.1], # Скорость обучения

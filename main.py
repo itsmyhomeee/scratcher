@@ -16,7 +16,7 @@ dp  = Dispatcher(storage=MemoryStorage())
 
 @dp.startup()
 async def on_startup():
-    bot["wrapper"] = CianBotWrapper()
+    dp["wrapper"] = CianBotWrapper()
     print("✅ Бот и модели загружены")
 
 dp.include_router(router)

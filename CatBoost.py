@@ -1,4 +1,3 @@
-from dvc import __main__
 import numpy as np
 import pandas as pd
 from catboost import CatBoostRegressor
@@ -56,5 +55,6 @@ mape = mean_absolute_percentage_error(y_test, y_pred)
 print(f"\nСредняя абсолютная ошибка (MAE): {mae:.2f}")
 print(f"Коэффициент детерминации (R²): {r2:.4f}")
 print(f"Средняя относительная ошибка (MAPE): {mape:.2%}")
+
 #model.save_model("rag_assets/catboost_model.cbm")
 #print("Модель сохранена в rag_assets/catboost_model.cbm")

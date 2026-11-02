@@ -11,7 +11,8 @@ class RealEstateAI:
             openai_api_base=OPENAI_API_BASE,
             temperature=0
         )
-        self.cat_model = CatBoostRegressor()
+        self.cat_model = None
         path = BASE_DIR / "rag_assets/catboost_model.cbm"
         if path.exists():
+            self.cat_model = CatBoostRegressor()
             self.cat_model.load_model(str(path))
